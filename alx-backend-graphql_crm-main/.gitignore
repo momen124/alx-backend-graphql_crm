@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.log
+
+# Django
+*.sqlite3
+db.sqlite3
+/media
+/staticfiles
+/static
+
+# Environment
+.env
+.venv/
+venv/
+env/
+ENV/
+*.env
+
+# Migrations (optional: keep __init__.py if you track migrations)
+*/migrations/*.py
+*/migrations/*.pyc
+!*/migrations/__init__.py
+
+# Pytest / Coverage
+htmlcov/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# GraphQL
+*.graphql.py
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# macOS & Linux
+.DS_Store
+*.swp
+*.swo
+.idea/
+*.bak
+
+# Logs
+*.log
+
+# Node (in case of frontend or test clients)
+node_modules/
+npm-debug.log*
+
+# Pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# JetBrains IDEs
+.idea/
+
+# Backup
+*.bak
+*.tmp
+
+# System
+Thumbs.db
+ehthumbs.db
