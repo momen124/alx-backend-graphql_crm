@@ -1,0 +1,4 @@
+django-crontab==0.7.1
+gql==3.4.0
+requests==2.31.0
+# ... other dependencies
