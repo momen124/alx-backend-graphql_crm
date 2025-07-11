@@ -142,7 +142,7 @@ class FilteredConnectionField(DjangoFilterConnectionField):
         return queryset
 
 
-#  MUTATIONS 
+# MUTATIONS 
 class CreateCustomer(graphene.Mutation):
     class Arguments:
         input = CustomerInput(required=True)
@@ -242,6 +242,32 @@ class CreateOrder(graphene.Mutation):
         return CreateOrder(order=order)
 
 
+# NEW MUTATION FOR TASK 3
+class UpdateLowStockProducts(graphene.Mutation):
+    class Arguments:
+        pass  # No arguments needed, as the mutation operates on all products with stock < 10
+
+    updated_products = graphene.List(ProductType)
+    message = graphene.String()
+
+    def mutate(self, info):
+        # Query products with stock < 10
+        low_stock_products = Product.objects.filter(stock__lt=10)
+        updated_products = []
+
+        # Update stock for each product
+        for product in low_stock_products:
+            product.stock += 10
+            product.save()
+            updated_products.append(product)
+
+        # Return updated products and a success message
+        return UpdateLowStockProducts(
+            updated_products=updated_products,
+            message=f"Updated {len(updated_products)} products"
+        )
+
+
 # QUERY EXPORT 
 class Query(graphene.ObjectType):
     hello = graphene.String(default_value="Hello from CRM schema!")
@@ -260,9 +286,14 @@ class Query(graphene.ObjectType):
     )
 
 
-#  MUTATION EXPORT
+# MUTATION EXPORT
 class Mutation(graphene.ObjectType):
     create_customer = CreateCustomer.Field()
     bulk_create_customers = BulkCreateCustomers.Field()
     create_product = CreateProduct.Field()
     create_order = CreateOrder.Field()
+    update_low_stock_products = UpdateLowStockProducts.Field()  # Add the new mutation
+
+
+# Define the schema
+schema = graphene.Schema(query=Query, mutation=Mutation)
