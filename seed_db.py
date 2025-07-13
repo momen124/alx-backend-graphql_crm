@@ -1,75 +1,92 @@
+#!/usr/bin/env python
+"""
+Seed script to populate the database with sample data
+"""
 import os
+import sys
 import django
-from decimal import Decimal
-from datetime import datetime, timedelta
-import random
 
-# Setup Django environment for standalone script usage
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'alx_backend_graphql_crm.settings')
+# Setup Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'graphql_crm.settings')
 django.setup()
 
 from crm.models import Customer, Product, Order
 
-def seed_customers():
-    sample_customers = [
+
+def seed_database():
+    """Seed the database with sample data"""
+    print("🌱 Seeding database...")
+
+    # Create customers
+    customers_data = [
         {"name": "Alice Johnson", "email": "alice@example.com", "phone": "+1234567890"},
         {"name": "Bob Smith", "email": "bob@example.com", "phone": "123-456-7890"},
-        {"name": "Carol White", "email": "carol@example.com", "phone": "+1987654321"},
-        {"name": "David Lee", "email": "david@example.com", "phone": "+11234567890"},
-        {"name": "Eve Adams", "email": "eve@example.com", "phone": "123-123-1234"},
+        {"name": "Carol Brown", "email": "carol@example.com", "phone": "+1987654321"},
+        {"name": "David Wilson", "email": "david@example.com"},
     ]
 
-    created_customers = []
-    for cust in sample_customers:
+    customers = []
+    for data in customers_data:
         customer, created = Customer.objects.get_or_create(
-            email=cust['email'],
-            defaults={"name": cust['name'], "phone": cust['phone']}
+            email=data['email'],
+            defaults=data
         )
-        created_customers.append(customer)
-    print(f"Seeded {len(created_customers)} customers")
-    return created_customers
+        customers.append(customer)
+        if created:
+            print(f"✅ Created customer: {customer.name}")
+        else:
+            print(f"ℹ️  Customer already exists: {customer.name}")
 
-def seed_products():
-    sample_products = [
-        {"name": "Laptop", "price": Decimal("999.99"), "stock": 10},
-        {"name": "Smartphone", "price": Decimal("599.99"), "stock": 25},
-        {"name": "Headphones", "price": Decimal("199.99"), "stock": 50},
-        {"name": "Keyboard", "price": Decimal("49.99"), "stock": 100},
-        {"name": "Monitor", "price": Decimal("299.99"), "stock": 20},
+    # Create products
+    products_data = [
+        {"name": "Laptop", "price": 999.99, "stock": 10},
+        {"name": "Mouse", "price": 29.99, "stock": 50},
+        {"name": "Keyboard", "price": 79.99, "stock": 30},
+        {"name": "Monitor", "price": 299.99, "stock": 15},
+        {"name": "Headphones", "price": 199.99, "stock": 25},
     ]
 
-    created_products = []
-    for prod in sample_products:
+    products = []
+    for data in products_data:
         product, created = Product.objects.get_or_create(
-            name=prod['name'],
-            defaults={"price": prod['price'], "stock": prod['stock']}
+            name=data['name'],
+            defaults=data
         )
-        created_products.append(product)
-    print(f"Seeded {len(created_products)} products")
-    return created_products
+        products.append(product)
+        if created:
+            print(f"✅ Created product: {product.name}")
+        else:
+            print(f"ℹ️  Product already exists: {product.name}")
 
-def seed_orders(customers, products):
-    order_count = 0
-    for customer in customers:
-        # Each customer places 1-3 orders randomly
-        num_orders = random.randint(1, 3)
-        for _ in range(num_orders):
-            chosen_products = random.sample(products, random.randint(1, min(3, len(products))))
-            total_amount = sum(p.price for p in chosen_products)
-            order_date = datetime.now() - timedelta(days=random.randint(0, 365))
+    # Create sample orders
+    if customers and products:
+        # Order 1: Alice buys laptop and mouse
+        order1, created = Order.objects.get_or_create(
+            customer=customers[0],
+            defaults={}
+        )
+        if created:
+            order1.products.set([products[0], products[1]])  # Laptop + Mouse
+            order1.calculate_total()
+            order1.save()
+            print(f"✅ Created order for {customers[0].name}: ${order1.total_amount}")
 
-            order = Order.objects.create(
-                customer=customer,
-                total_amount=total_amount,
-                order_date=order_date
-            )
-            order.products.set(chosen_products)
-            order_count += 1
-    print(f"Seeded {order_count} orders")
+        # Order 2: Bob buys keyboard and headphones
+        order2, created = Order.objects.get_or_create(
+            customer=customers[1],
+            defaults={}
+        )
+        if created:
+            order2.products.set([products[2], products[4]])  # Keyboard + Headphones
+            order2.calculate_total()
+            order2.save()
+            print(f"✅ Created order for {customers[1].name}: ${order2.total_amount}")
+
+    print("\nDatabase seeding completed!")
+    print(f"Total customers: {Customer.objects.count()}")
+    print(f"Total products: {Product.objects.count()}")
+    print(f"Total orders: {Order.objects.count()}")
+
 
 if __name__ == '__main__':
-    print("Starting DB seed...")
-    customers = seed_customers()
-    products = seed_products()
-    seed_orders(customers, products)
-    print("DB seed complete!")
+    seed_database()

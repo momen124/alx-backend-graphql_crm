@@ -1,181 +1,141 @@
+"""
+Django-crontab job definitions for CRM application
+"""
+import os
+import django
 from datetime import datetime
-import requests
-import json
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+
+# Setup Django environment
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'graphql_crm.settings')
+django.setup()
+
 
 def log_crm_heartbeat():
-    """Log a heartbeat to confirm CRM application's health"""
-    LOG_FILE = "/tmp/crm_heartbeat_log.txt"
+    """
+    Log a heartbeat message to confirm CRM application health.
+    Logs in format: DD/MM/YYYY-HH:MM:SS CRM is alive
+    Optionally queries GraphQL hello field to verify endpoint responsiveness.
+    """
+    # Get current timestamp in required format
     timestamp = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
     
+    # Create heartbeat message
     heartbeat_message = f"{timestamp} CRM is alive"
     
-    # Optionally, query the GraphQL hello field to verify endpoint responsiveness
     try:
-        # Setup GraphQL client with CSRF handling
-        session = requests.Session()
-        get_response = session.get("http://localhost:8000/graphql/")
-        csrf_token = session.cookies.get('csrftoken')
+        # Optional: Test GraphQL endpoint responsiveness
+        from gql import gql, Client
+        from gql.transport.requests import RequestsHTTPTransport
         
-        headers = {
-            'X-CSRFToken': csrf_token,
-            'Referer': 'http://localhost:8000/graphql/',
-        }
+        # Setup GraphQL client
+        transport = RequestsHTTPTransport(url="http://localhost:8000/graphql")
+        client = Client(transport=transport, fetch_schema_from_transport=True)
         
-        transport = RequestsHTTPTransport(
-            url="http://localhost:8000/graphql/",
-            use_json=True,
-            headers=headers,
-            cookies=session.cookies
-        )
+        # Query the hello field
+        query = gql("""
+            query {
+                hello
+            }
+        """)
         
-        client = Client(transport=transport, fetch_schema_from_transport=False)
-        
-        # GraphQL hello query using gql to check endpoint health
-        query = gql("{ hello }")
-        
-        # Execute the query
         result = client.execute(query)
+        hello_response = result.get('hello', 'No response')
         
-        if result and 'hello' in result:
-            heartbeat_message += f" - GraphQL endpoint responsive: {result['hello']}"
-        else:
-            heartbeat_message += " - GraphQL endpoint reachable but no hello response"
-            
+        # Enhanced message with GraphQL response
+        heartbeat_message += f" - GraphQL hello: {hello_response}"
+        
     except Exception as e:
+        # If GraphQL query fails, log the error but continue with basic heartbeat
         heartbeat_message += f" - GraphQL check failed: {str(e)}"
     
-    # Append to the log file
-    with open(LOG_FILE, "a") as f:
-        f.write(f"{heartbeat_message}\n")
+    # Append heartbeat message to log file
+    try:
+        with open('/tmp/crm_heartbeat_log.txt', 'a') as log_file:
+            log_file.write(heartbeat_message + '\n')
+    except Exception as e:
+        # Fallback logging if file write fails
+        print(f"Failed to write heartbeat log: {e}")
+        print(heartbeat_message)
 
-def update_low_stock():
-    """Update low stock items"""
-    LOG_FILE = "/tmp/low_stock_updates_log.txt"
+
+def updatelowstock():
+    """
+    Execute UpdateLowStockProducts mutation via GraphQL endpoint.
+    Logs updated product names and new stock levels with timestamp.
+    """
+    # Get current timestamp
     timestamp = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
     
-    update_low_stock_message = "Low stock update started"
-
     try:
-        # Setup GraphQL client with CSRF handling
-        session = requests.Session()
-        get_response = session.get("http://localhost:8000/graphql/")
-        csrf_token = session.cookies.get('csrftoken')
+        # Import GraphQL client
+        from gql import gql, Client
+        from gql.transport.requests import RequestsHTTPTransport
         
-        headers = {
-            'X-CSRFToken': csrf_token,
-            'Referer': 'http://localhost:8000/graphql/',
-        }
+        # Setup GraphQL client
+        transport = RequestsHTTPTransport(url="http://localhost:8000/graphql")
+        client = Client(transport=transport, fetch_schema_from_transport=True)
         
-        transport = RequestsHTTPTransport(
-            url="http://localhost:8000/graphql/",
-            use_json=True,
-            headers=headers,
-            cookies=session.cookies
-        )
-        
-        client = Client(transport=transport, fetch_schema_from_transport=False)
-        
-        # GraphQL mutation to update low stock products
+        # First, query products with stock < 10
         query = gql("""
-            mutation UpdateLowStockProducts {
+            query {
+                lowStockProducts {
+                    id
+                    name
+                    stock
+                }
+            }
+        """)
+        
+        query_result = client.execute(query)
+        low_stock_products = query_result.get('lowStockProducts', [])
+        
+        # Execute UpdateLowStockProducts mutation to increment stock by 10
+        mutation = gql("""
+            mutation {
                 updateLowStockProducts {
+                    success
+                    message
+                    count
                     updatedProducts {
+                        id
                         name
                         stock
                     }
-                    successMessage
-                    count
                 }
             }
         """)
         
-        # Execute the mutation
-        result = client.execute(query)
+        result = client.execute(mutation)
+        mutation_result = result.get('updateLowStockProducts', {})
         
-        if result and 'updateLowStockProducts' in result:
-            mutation_result = result['updateLowStockProducts']
-            update_low_stock_message = f"Low stock update completed: {mutation_result['successMessage']}"
-            
-            # Log each updated product
-            if mutation_result['updatedProducts']:
-                with open(LOG_FILE, "a") as f:
-                    f.write(f"{timestamp} {update_low_stock_message}\n")
-                    for product in mutation_result['updatedProducts']:
-                        f.write(f"{timestamp} Updated product: {product['name']} - New stock: {product['stock']}\n")
-                return  # Exit early since we've already written to the file
-            else:
-                update_low_stock_message = f"Low stock update completed: {mutation_result['successMessage']}"
+        # Log the results
+        log_entries = []
+        log_entries.append(f"[{timestamp}] Low stock update executed")
+        log_entries.append(f"Success: {mutation_result.get('success', False)}")
+        log_entries.append(f"Message: {mutation_result.get('message', 'No message')}")
+        log_entries.append(f"Products updated: {mutation_result.get('count', 0)}")
+        
+        # Log individual product updates
+        updated_products = mutation_result.get('updatedProducts', [])
+        if updated_products:
+            log_entries.append("Updated products:")
+            for product in updated_products:
+                log_entries.append(f"  - {product['name']}: New stock level = {product['stock']}")
         else:
-            update_low_stock_message = "Low stock update failed: No response from mutation"
+            log_entries.append("No products were updated")
+        
+        # Write to log file
+        with open('/tmp/lowstockupdates_log.txt', 'a') as log_file:
+            for entry in log_entries:
+                log_file.write(entry + '\n')
+            log_file.write('\n')  # Add blank line for readability
             
     except Exception as e:
-        update_low_stock_message = f"Low stock update failed: {str(e)}"
-
-    # Append to the log file (for cases where no products were updated or errors occurred)
-    with open(LOG_FILE, "a") as f:
-        f.write(f"{timestamp} {update_low_stock_message}\n")
-
-def generate_crm_report_task():
-    """Generate a CRM report"""
-    LOG_FILE = '/tmp/crm_report_log.txt'
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    try:
-        # Setup GraphQL client with CSRF handling
-        session = requests.Session()
-        get_response = session.get("http://localhost:8000/graphql/")
-        csrf_token = session.cookies.get('csrftoken')
-        
-        headers = {
-            'X-CSRFToken': csrf_token,
-            'Referer': 'http://localhost:8000/graphql/',
-        }
-        
-        transport = RequestsHTTPTransport(
-            url="http://localhost:8000/graphql/",
-            use_json=True,
-            headers=headers,
-            cookies=session.cookies
-        )
-        
-        client = Client(transport=transport, fetch_schema_from_transport=False)
-
-        # GraphQL query to fetch CRM statistics
-        query = gql("""
-            query CRMReport {
-                crmStats {
-                    totalCustomers
-                    totalOrders
-                    totalRevenue
-                }
-            }
-        """)
-        
-        # Execute the query
-        result = client.execute(query)
-        
-        if result and 'crmStats' in result:
-            stats = result['crmStats']
-            total_customers = stats['totalCustomers']
-            total_orders = stats['totalOrders']
-            total_revenue = stats['totalRevenue']
-            
-            report_message = f"{timestamp} - Report: {total_customers} customers, {total_orders} orders, ${total_revenue} revenue"
-        else:
-            report_message = f"{timestamp} - Report generation failed: No response from CRM stats query"
-            
-    except Exception as e:
-        report_message = f"{timestamp} - Report generation failed: {str(e)}"
-
-    # Append to the log file
-    with open(LOG_FILE, "a") as f:
-        f.write(f"{report_message}\n")
-
-
-def main():
-    """Main function to run cron jobs"""
-    log_crm_heartbeat()
-    update_low_stock()
-    generate_crm_report_task()
+        # Log errors
+        error_message = f"[{timestamp}] ERROR in update_low_stock: {str(e)}"
+        try:
+            with open('/tmp/lowstockupdates_log.txt', 'a') as log_file:
+                log_file.write(error_message + '\n\n')
+        except Exception as log_error:
+            print(f"Failed to write error log: {log_error}")
+            print(error_message)
